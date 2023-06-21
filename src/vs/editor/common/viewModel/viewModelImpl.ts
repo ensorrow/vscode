@@ -59,6 +59,7 @@ export class ViewModel extends Disposable implements IViewModel {
 	public readonly viewLayout: ViewLayout;
 	private readonly _cursor: CursorsController;
 	private readonly _decorations: ViewModelDecorations;
+	private _hiddenAreas: IRange[] = [];
 
 	constructor(
 		editorId: number,
@@ -453,7 +454,12 @@ export class ViewModel extends Disposable implements IViewModel {
 		}));
 	}
 
+	public get hiddenAreas() {
+		return this._hiddenAreas;
+	}
+
 	public setHiddenAreas(ranges: Range[]): void {
+		this._hiddenAreas = ranges;
 		let lineMappingChanged = false;
 		try {
 			const eventsCollector = this._eventDispatcher.beginEmitViewEvents();

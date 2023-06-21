@@ -1467,6 +1467,36 @@ abstract class ViewZonesComputer {
 	}
 
 	public getViewZones(): IEditorsZones {
+		const hiddenRanges = {
+			'modified': this._modifiedEditor._getViewModel()?.hiddenAreas,
+			'original': this._originalEditor._getViewModel()?.hiddenAreas,
+		};
+		// 根据折叠后的相对位置推算出绝对位置
+		const getActualLineBreforeFolding = (lineNumber: number, type: 'original' | 'modified') => {
+			if (!hiddenRanges || !hiddenRanges[type]?.length) {
+				return lineNumber;
+			}
+			const hiddenRange = hiddenRanges[type]!;
+			// 只有一个折叠区域，判断是否在其开始折叠位置之后
+			if (hiddenRange.length === 1) {
+				return lineNumber > hiddenRange[0].startLineNumber - 1 ? lineNumber + hiddenRange[0].endLineNumber - hiddenRange[0].startLineNumber + 1 : lineNumber;
+			}
+			let prevCollapseLine = 0;
+			let count = 0;
+			let totalGap = 0;
+			// 需要range是按顺序的
+			for (let i = 0; i < hiddenRange.length; i++) {
+				totalGap += hiddenRange[i].startLineNumber - prevCollapseLine - 1;
+				if (totalGap >= lineNumber) {
+					break;
+				}
+				prevCollapseLine = hiddenRange[i].endLineNumber;
+				count += hiddenRange[i].endLineNumber - hiddenRange[i].startLineNumber + 1;
+			}
+			return lineNumber + count;
+		};
+
+		// NOTE: 在满足左右侧的hiddenArea是完全对齐的前提之下，以左侧为准，将当前行之上隐藏的行数减掉，理论上是可行的
 		const originalLineHeight = this._originalEditor.getOption(EditorOption.lineHeight);
 		const modifiedLineHeight = this._modifiedEditor.getOption(EditorOption.lineHeight);
 		const originalHasWrapping = (this._originalEditor.getOption(EditorOption.wrappingInfo).wrappingColumn !== -1);
@@ -1577,10 +1607,10 @@ abstract class ViewZonesComputer {
 			}
 
 			// [PRODUCE] View zone(s) in original-side due to foreign view zone(s) in modified-side
-			while (modifiedForeignVZ.current && modifiedForeignVZ.current.afterLineNumber <= modifiedEndEquivalentLineNumber) {
+			while (modifiedForeignVZ.current && getActualLineBreforeFolding(modifiedForeignVZ.current.afterLineNumber, 'modified') <= modifiedEndEquivalentLineNumber) {
 				let viewZoneLineNumber: number;
-				if (modifiedForeignVZ.current.afterLineNumber <= modifiedEquivalentLineNumber) {
-					viewZoneLineNumber = originalEquivalentLineNumber - modifiedEquivalentLineNumber + modifiedForeignVZ.current.afterLineNumber;
+				if (getActualLineBreforeFolding(modifiedForeignVZ.current.afterLineNumber, 'modified') <= modifiedEquivalentLineNumber) {
+					viewZoneLineNumber = originalEquivalentLineNumber - modifiedEquivalentLineNumber + getActualLineBreforeFolding(modifiedForeignVZ.current.afterLineNumber, 'modified');
 				} else {
 					viewZoneLineNumber = originalEndEquivalentLineNumber;
 				}
@@ -1600,10 +1630,10 @@ abstract class ViewZonesComputer {
 			}
 
 			// [PRODUCE] View zone(s) in modified-side due to foreign view zone(s) in original-side
-			while (originalForeignVZ.current && originalForeignVZ.current.afterLineNumber <= originalEndEquivalentLineNumber) {
+			while (originalForeignVZ.current && getActualLineBreforeFolding(originalForeignVZ.current.afterLineNumber, 'original') <= originalEndEquivalentLineNumber) {
 				let viewZoneLineNumber: number;
-				if (originalForeignVZ.current.afterLineNumber <= originalEquivalentLineNumber) {
-					viewZoneLineNumber = modifiedEquivalentLineNumber - originalEquivalentLineNumber + originalForeignVZ.current.afterLineNumber;
+				if (getActualLineBreforeFolding(originalForeignVZ.current.afterLineNumber, 'original') <= originalEquivalentLineNumber) {
+					viewZoneLineNumber = modifiedEquivalentLineNumber - originalEquivalentLineNumber + getActualLineBreforeFolding(originalForeignVZ.current.afterLineNumber, 'original');
 				} else {
 					viewZoneLineNumber = modifiedEndEquivalentLineNumber;
 				}
